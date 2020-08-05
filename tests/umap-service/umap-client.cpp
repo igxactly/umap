@@ -11,6 +11,8 @@ int main(int argc, char *argv[]){
     std::cout<<"Please provide a filename to umap";
     exit(-1);
   }
+
+  init_umap_client(std::string(UMAP_SERVER_PATH));
   mapped_addr = client_umap(argv[1], PROT_READ, MAP_SHARED|MAP_FIXED);
   mapped_addr2 = client_umap(argv[2], PROT_READ, MAP_SHARED|MAP_FIXED);
   for(i=0, read_addr=(char *)mapped_addr, read_addr2=(char *)mapped_addr2;i<10000 ;i++,read_addr+16384, read_addr2+4096){
@@ -26,4 +28,5 @@ int main(int argc, char *argv[]){
     char val = *read_addr;
     cout<<"Jumped to next page"<<val<<endl;
   }
+  close_umap_client();
 }

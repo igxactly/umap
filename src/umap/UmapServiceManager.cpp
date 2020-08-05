@@ -1,6 +1,5 @@
 #include "UmapServiceManager.hpp"
 #include "umap/util/Macros.hpp"
-#include "umap.h"
 #include <iostream>
 #include <algorithm>
 #include <mutex>
@@ -89,16 +88,41 @@ void UmapServInfo::remove_remote_umap_handle()
   munmap(loc.base_addr, loc.size);
 }
 
+void ClientManager::setupUmapConnection(){
+  int uffd;
+  int dummy;
+  if(!umap_server_fd){
+    if(setup_uds_connection(&umap_server_fd, umap_server_path.c_str()) < 0){
+      UMAP_LOG(Error, "unable to setup connection with file server");
+      return;
+    }
+    uffd = init_client_uffd();
+    sock_fd_write(umap_server_fd, &dummy, sizeof(int), uffd);
+    ::close(uffd);
+  }
+}
+
+void ClientManager::closeUmapConnection(){
+  //Ideally this shouldn't require locks to be checked
+  std::lock_guard<std::mutex> lock(cm_mutex);
+  ::close(umap_server_fd);
+}
+
 void *submit_umap_req(char *filename, int prot, int flags){
   ClientManager *cm = ClientManager::getInstance();
-  return cm->map_req(std::string(filename), prot, flags);
-  
+  return cm->map_req(std::string(filename), prot, flags);   
 }
 
 int submit_uunmap_req(char *filename){
   ClientManager *cm = ClientManager::getInstance();
   cm->unmap_req(std::string(filename));
   return 0;
+}
+
+void terminateUmapClient(){
+  ClientManager *cm = ClientManager::getInstance();
+  cm->closeUmapConnection();
+  ClientManager::deleteInstance();
 }
 
 UmapServInfo* ClientManager::cs_umap(std::string filename, int prot, int flags){
@@ -111,15 +135,6 @@ UmapServInfo* ClientManager::cs_umap(std::string filename, int prot, int flags){
     //Todo:For multiple requests from multiple threads, it will need to be serialized
     UMAP_LOG(Error, "file already mapped for the application");
   }else{
-    if(!umap_server_fd){
-      if(setup_uds_connection(&umap_server_fd, umap_server_path.c_str()) < 0){
-        UMAP_LOG(Error, "unable to setup connection with file server");
-        return ret;
-      }
-      uffd = init_client_uffd();
-      sock_fd_write(umap_server_fd, &dummy, sizeof(int), uffd);
-      ::close(uffd);
-    }
     ret = new UmapServInfo(umap_server_fd, filename, args);
     file_conn_map[filename] = ret;
   }
@@ -312,7 +327,16 @@ void start_umap_service(int csfd){
   usm->start_service_thread(csfd, uffd);
 }
 
+void connectUmap(std::string sock_path){
+  ClientManager *cm = ClientManager::getInstance(sock_path);
+  cm->setupUmapConnection();
+}
+
 } //End of Umap namespace
+
+void init_umap_client(std::string sock_path){
+  Umap::connectUmap(sock_path);
+}
 
 void* client_umap(char *filename, int prot, int flags){
   return Umap::submit_umap_req(filename, prot, flags);
@@ -322,12 +346,16 @@ int client_uunmap(char *filename){
   return Umap::submit_uunmap_req(filename);
 }
 
-void umap_server(std::string filename){
+void close_umap_client(){
+  Umap::terminateUmapClient();
+}
+
+void umap_server(std::string sock_path){
   int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
   struct sockaddr_un addr;
 
   memset(&addr, 0, sizeof(addr));
-  snprintf(addr.sun_path, sizeof(addr.sun_path), UMAP_SERVER_PATH);
+  snprintf(addr.sun_path, sizeof(addr.sun_path), sock_path.c_str());
   addr.sun_family = AF_UNIX;
   unlink(addr.sun_path);
   bind(sfd, (struct sockaddr*)&addr, sizeof(addr));
