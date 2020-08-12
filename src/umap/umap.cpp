@@ -130,13 +130,13 @@ terminate_handler(int client_fd)
   UMAP_LOG(Info, "Done");
 }
 
-int
+bool
 uunmap_server(void *addr, uint64_t length, int client_fd, int file_fd, bool client_term){
   UMAP_LOG(Debug, "addr: " << addr << ", length: " << length);
   auto& rm = Umap::RegionManager::getInstance();
-  rm.removeRegion((char*)addr, client_fd, file_fd, client_term);
+  bool ret = rm.removeRegion((char*)addr, client_fd, file_fd, client_term);
   UMAP_LOG(Debug, "Done");
-  return 0; 
+  return ret; 
 }
 
 void*

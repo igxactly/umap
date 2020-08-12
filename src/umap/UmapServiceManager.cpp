@@ -224,10 +224,12 @@ int UmapServiceThread::submitUnmapRequest(std::string filename, bool client_term
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex); 
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
   if(map_reg){
+    if(Umap::uunmap_server(map_reg->reg.base_addr, map_reg->reg.size, uffd, map_reg->filefd, client_term)){ 
     //We could move the ref count of regions at this level
-    Umap::uunmap_server(map_reg->reg.base_addr, map_reg->reg.size, uffd, map_reg->filefd, client_term); 
-    munmap(map_reg->reg.base_addr, map_reg->reg.size);
-    mgr->remove_mapped_region(filename);
+      munmap(map_reg->reg.base_addr, map_reg->reg.size);
+      mgr->remove_mapped_region(filename);
+    }
+    return 0;
   }else{
     UMAP_LOG(Error, "No such file mapped");
     return -1;

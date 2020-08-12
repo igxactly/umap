@@ -133,19 +133,13 @@ RegionManager::terminateUffdHandler(int client_fd)
   }
 }
 
-void
+bool
 RegionManager::removeRegion( char* region, int client_fd, int filefd, bool client_term) 
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto it = m_active_regions.find(region);
   auto uit = m_client_uffds.find(client_fd);
-  
-  if(client_fd){
-    auto fit = m_fd_rd_map.find(filefd);
-    if(fit != m_fd_rd_map.end()){
-      m_fd_rd_map.erase(fit);
-    }
-  }
+  bool ret = false;
 
   if(uit == m_client_uffds.end()){
     UMAP_ERROR("Can't find uffd for client fd: " << client_fd);
@@ -170,8 +164,16 @@ RegionManager::removeRegion( char* region, int client_fd, int filefd, bool clien
     c_uffd->release_buffer(rd);
     delete rd;
     m_active_regions.erase(it);
+    if(client_fd){
+      auto fit = m_fd_rd_map.find(filefd);
+      if(fit != m_fd_rd_map.end()){
+        m_fd_rd_map.erase(fit);
+      }
+    }
+    ret = true;
   }
   m_last_iter = m_active_regions.end();
+  return ret;
 #if 0
   if ( m_active_regions.empty() ) {
     delete m_evict_manager; m_evict_manager = nullptr;

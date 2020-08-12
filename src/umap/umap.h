@@ -40,7 +40,7 @@ void* umap_ex(
   , int           client_uffd=0
   , void *        remote_base=NULL
 );
-int uunmap_server(
+bool uunmap_server(
     void*  addr
   , size_t length
   , int client_fd
