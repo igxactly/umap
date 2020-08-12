@@ -38,6 +38,7 @@ void* umap_ex(
   , Umap::Store*  store
   , bool          server=false
   , int           client_uffd=0
+  , void *        remote_base=NULL
 );
 int uunmap_server(
     void*  addr

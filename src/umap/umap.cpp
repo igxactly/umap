@@ -150,6 +150,7 @@ umap_ex(
   , Store* store
   , bool server
   , int client_uffd
+  , void* remote_base
 )
 {
   std::lock_guard<std::mutex> lock(g_mutex);
@@ -231,9 +232,9 @@ umap_ex(
 
     if ( store == nullptr )
       store = Store::make_store(umap_region, umap_size, umap_psize, fd);
-    rm.addRegion(fd, store, umap_region, umap_size, (char*)mmap_region, mmap_size, server, client_uffd);
+    rm.addRegion(fd, store, umap_region, umap_size, (char*)mmap_region, mmap_size, server, client_uffd, remote_base);
   }else{
-    umap_region = (void *)rm.associateRegion(fd, reg_desc, server, client_uffd);
+    umap_region = (void *)rm.associateRegion(fd, reg_desc, server, client_uffd,remote_base);
   }
 
   return umap_region;

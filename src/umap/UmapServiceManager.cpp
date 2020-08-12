@@ -46,7 +46,6 @@ long init_client_uffd() {
 namespace Umap{
 Umap::ClientManager* ClientManager::instance = NULL;
 Umap::UmapServerManager* Umap::UmapServerManager::Instance=NULL;
-static uint64_t next_region_start_addr = 0x600000000000;
 
 int UmapServInfo::setup_remote_umap_handle(){
   int status = 0;
@@ -60,7 +59,7 @@ int UmapServInfo::setup_remote_umap_handle(){
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
   std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<loc.size<<std::endl;
 
-  void* base_addr = mmap(loc.base_addr, loc.size, PROT_READ, MAP_SHARED|MAP_FIXED, memfd, 0);
+  void* base_addr = mmap(0, loc.size, PROT_READ, MAP_SHARED, memfd, 0);
   if ((int64_t)base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -68,7 +67,7 @@ int UmapServInfo::setup_remote_umap_handle(){
 
   std::cout<<"mmap:"<<std::hex<< base_addr<<std::endl;
   //Tell server that the mmap is complete
-  ::write(umap_server_fd, "\x00", 1);
+  ::write(umap_server_fd, (void *)&base_addr, sizeof(base_addr));
 
   //Wait for the server to register the region to uffd
   sock_recv(umap_server_fd, (char*)&status, 1);
@@ -188,6 +187,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   int ffd = -1;
   char status;
   void *base_addr_local;
+  void *base_addr_remote;
 
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
@@ -205,20 +205,19 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
     memfd = memfd_create("uffd", 0);
     ftruncate(memfd, st.st_size);
     mapped_files.push_back(filename);
-    map_reg = new mappedRegionInfo(ffd, memfd, (void *)next_region_start_addr, st.st_size);
-    base_addr_local = mmap(map_reg->reg.base_addr, map_reg->reg.size, PROT_READ, MAP_SHARED|MAP_FIXED, memfd, 0);
+    base_addr_local = mmap(0, st.st_size, PROT_READ, MAP_SHARED, memfd, 0);
+    map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, st.st_size);
     mgr->add_mapped_region(filename, map_reg);
           //Todo: add error handling code
-    next_region_start_addr += st.st_size;
+   // next_region_start_addr += st.st_size;
   }
   //Sending the memfd
   sock_fd_write(csfd, (char*)&(map_reg->reg), sizeof(region_loc), map_reg->memfd);
   //Wait for the memfd to get mapped by the client
-  sock_recv(csfd, (char*)&status, 1);
+  sock_recv(csfd, (char*)&base_addr_remote, sizeof(base_addr_remote));
   //uffd is already present with the UmapServiceThread
   std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<map_reg->reg.size<<std::endl;
-
-  return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, prot, flags, map_reg->filefd, 0, NULL, true, uffd); //prot and flags need to be set 
+  return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, prot, flags, map_reg->filefd, 0, NULL, true, uffd, base_addr_remote); //prot and flags need to be set 
 }
 
 int UmapServiceThread::submitUnmapRequest(std::string filename, bool client_term){

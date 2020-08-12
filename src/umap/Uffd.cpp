@@ -117,7 +117,7 @@ Uffd::uffd_handler( void )
       // search to continue from where it last found something.
       //
       UMAP_LOG(Info, "Received fault event\n");
-      process_page(iswrite, last_addr);
+      process_page(iswrite, m_server?(char *)get_local_addr(last_addr):last_addr);
     }
   }
   UMAP_LOG(Debug, "Good bye");
@@ -139,7 +139,8 @@ Uffd::ThreadEntry()
 }
 
 Uffd::Uffd( bool server, int uffd_fd)
-  :   WorkerPool("Uffd Manager", 1)
+  :    m_server(server)
+    ,  WorkerPool("Uffd Manager", 1)
     , m_rm(RegionManager::getInstance())
     , m_max_fault_events(m_rm.get_max_fault_events())
     , m_page_size(m_rm.get_umap_page_size())
@@ -148,7 +149,7 @@ Uffd::Uffd( bool server, int uffd_fd)
   UMAP_LOG(Info, "\n maximum fault events: " << m_max_fault_events
                   << "\n            page size: " << m_page_size);
 
-  if(server){
+  if(m_server){
     m_uffd_fd = uffd_fd;
   }else{
     if ((m_uffd_fd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK)) < 0)
@@ -218,7 +219,7 @@ void
 Uffd::copy_in_page(char* data, void* page_address)
 {
   struct uffdio_copy copy = {
-      .dst = (uint64_t)page_address
+      .dst = (uint64_t)(m_server?get_remote_addr(page_address):page_address)
     , .src = (uint64_t)data
     , .len = m_page_size
     , .mode = 0
@@ -231,6 +232,9 @@ Uffd::copy_in_page(char* data, void* page_address)
 void
 Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 {
+  if(m_server){
+    UMAP_ERROR("WP not supported by umap-server");
+  }
   UMAP_LOG(Debug, "(page_address = " << page_address << ")");
   struct uffdio_copy copy = {
       .dst = (uint64_t)page_address
@@ -252,10 +256,10 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 }
 
 void
-Uffd::register_region( RegionDescriptor* rd )
+Uffd::register_region( RegionDescriptor* rd, void* remote_base)
 {
   struct uffdio_register uffdio_register = {
-      .range = {  .start = (__u64)(rd->start()), .len = rd->size() }
+      .range = {  .start = m_server?(__u64)remote_base:(__u64)(rd->start()), .len = rd->size() }
 #ifndef UMAP_RO_MODE
     , .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
 #else
@@ -273,6 +277,11 @@ Uffd::register_region( RegionDescriptor* rd )
     UMAP_ERROR("ioctl(UFFDIO_REGISTER) failed: " << strerror(errno)
         << "Number of regions is: " << m_rm.get_num_active_regions()
     );
+  }else{
+    if(m_server){
+      //Add the region to the bimap
+      m_rtol_map[remote_base] = rd;
+    }
   }
 
 #ifndef UMAP_RO_MODE
@@ -281,6 +290,33 @@ Uffd::register_region( RegionDescriptor* rd )
 #endif
   
   rd->acc_ref();
+}
+
+void *
+Uffd::get_remote_addr(void *local_addr){
+  std::map<void *, RegionDescriptor *>::iterator it;
+  for(it=m_rtol_map.begin(); it!=m_rtol_map.end(); it++){
+    RegionDescriptor* rd = it->second;
+    if((local_addr >= rd->start()) && 
+        (local_addr < ((char *)rd->start() + rd->size()))){
+      void *remote_base = it->first;
+      return remote_base + ((char *)local_addr - (char *)rd->start());
+    }
+  }
+  UMAP_ERROR("No remote address found mapped to local address"<<local_addr<<std::endl);
+}
+
+void *
+Uffd::get_local_addr(void *remote_addr){
+  std::map<void *, RegionDescriptor *>::iterator it;
+  for(it=m_rtol_map.begin(); it!=m_rtol_map.end(); it++){
+    RegionDescriptor* rd = it->second;
+    if((remote_addr >= (char *)it->first) && 
+        (remote_addr < ((char *)it->first + rd->size()))){
+      return rd->start() + ((char *)remote_addr - (char *)it->first);
+    }
+  }
+  UMAP_ERROR("No local address found mapped to remote address"<<remote_addr<<std::endl);
 }
 
 void
@@ -292,7 +328,7 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
   //
   if(!client_term){
     struct uffdio_register uffdio_register = {
-        .range = { .start = (__u64)(rd->start()), .len = rd->size() }
+        .range = { .start = m_server?(__u64)get_remote_addr(rd->start()):(__u64)(rd->start()), .len = rd->size() }
       , .mode = 0
     };
 
@@ -304,6 +340,9 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
 
     if (ioctl(m_uffd_fd, UFFDIO_UNREGISTER, &uffdio_register.range))
       UMAP_ERROR("ioctl(UFFDIO_UNREGISTER) failed: " << strerror(errno));
+    if(m_server){
+      m_rtol_map.erase(rd);
+    }
   }
   rd->rel_ref();
 }

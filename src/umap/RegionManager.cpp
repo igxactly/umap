@@ -50,11 +50,12 @@ RegionManager::setFDRegionMap(int file_fd, RegionDescriptor *rd){
 }
 
 char *
-RegionManager::associateRegion(int fd, void* existing_rd, bool server, int client_fd){
+RegionManager::associateRegion(int fd, void* existing_rd, bool server, int client_fd, void *remote_base){
   Uffd *c_uffd;
   auto rd = (RegionDescriptor *)existing_rd;
   c_uffd = getActiveUffd(server, client_fd);
-  c_uffd->register_region(rd);
+  //registering the region has to use remote address
+  c_uffd->register_region(rd, remote_base);
   return rd->start();
 }
 
@@ -73,7 +74,7 @@ RegionManager::getActiveUffd(bool server, int client_fd){
 }
 
 void
-RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size, bool server, int client_fd)
+RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_size, char* mmap_region, uint64_t mmap_region_size, bool server, int client_fd, void *remote_base)
 {
   std::lock_guard<std::mutex> lock(m_mutex);
   Uffd *c_uffd = NULL;
@@ -100,7 +101,8 @@ RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_siz
       << ", number of regions: " << m_active_regions.size() + 1
   );
 
-  c_uffd->register_region(rd);
+  //Registering the region needs to use the remote address
+  c_uffd->register_region(rd, remote_base);
   m_last_iter = m_active_regions.end();
 }
 

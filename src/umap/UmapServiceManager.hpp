@@ -107,6 +107,7 @@ namespace Umap{
     private:
       int memfd;
       region_loc reg;
+      region_loc remote_reg;
       int filefd;
     public:
        mappedRegionInfo(int fd, int mfd, void *b, uint64_t l):filefd(fd), memfd(mfd){ reg.base_addr = b; reg.size = l;}

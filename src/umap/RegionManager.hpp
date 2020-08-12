@@ -54,12 +54,14 @@ class RegionManager {
         , uint64_t mmap_region_size
         , bool     server=false
         , int      clientfd=0
+        , void*    remote_addr=NULL
     );
     char* associateRegion(
           int fd
         , void*   region
         , bool    server=false
         , int     clientfd=0
+        , void*   remote_base=NULL 
     );
 
     void *isFDRegionPresent(int fd);
