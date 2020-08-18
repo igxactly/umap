@@ -117,7 +117,7 @@ Uffd::uffd_handler( void )
       // search to continue from where it last found something.
       //
       UMAP_LOG(Info, "Received fault event\n");
-      process_page(iswrite, m_server?(char *)get_local_addr(last_addr):last_addr);
+      process_page(iswrite, /*m_server?(char *)get_local_addr(last_addr):*/last_addr);
     }
   }
   UMAP_LOG(Debug, "Good bye");
@@ -219,7 +219,7 @@ void
 Uffd::copy_in_page(char* data, void* page_address)
 {
   struct uffdio_copy copy = {
-      .dst = (uint64_t)(m_server?get_remote_addr(page_address):page_address)
+      .dst = (uint64_t)(/*m_server?get_remote_addr(page_address):*/page_address)
     , .src = (uint64_t)data
     , .len = m_page_size
     , .mode = 0
@@ -232,9 +232,9 @@ Uffd::copy_in_page(char* data, void* page_address)
 void
 Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 {
-  if(m_server){
-    UMAP_ERROR("WP not supported by umap-server");
-  }
+//  if(m_server){
+//    UMAP_ERROR("WP not supported by umap-server");
+//  }
   UMAP_LOG(Debug, "(page_address = " << page_address << ")");
   struct uffdio_copy copy = {
       .dst = (uint64_t)page_address
@@ -259,7 +259,7 @@ void
 Uffd::register_region( RegionDescriptor* rd, void* remote_base)
 {
   struct uffdio_register uffdio_register = {
-      .range = {  .start = m_server?(__u64)remote_base:(__u64)(rd->start()), .len = rd->size() }
+      .range = {  .start = /*m_server?(__u64)remote_base:*/(__u64)(rd->start()), .len = rd->size() }
 #ifndef UMAP_RO_MODE
     , .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
 #else
@@ -328,7 +328,7 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
   //
   if(!client_term){
     struct uffdio_register uffdio_register = {
-        .range = { .start = m_server?(__u64)get_remote_addr(rd->start()):(__u64)(rd->start()), .len = rd->size() }
+        .range = { .start = /*m_server?(__u64)get_remote_addr(rd->start()):*/(__u64)(rd->start()), .len = rd->size() }
       , .mode = 0
     };
 
