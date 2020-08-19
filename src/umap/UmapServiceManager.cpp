@@ -44,6 +44,7 @@ long init_client_uffd() {
 
 
 namespace Umap{
+static uint64_t next_region_start_addr = 0x600000000000;
 Umap::ClientManager* ClientManager::instance = NULL;
 Umap::UmapServerManager* Umap::UmapServerManager::Instance=NULL;
 
@@ -57,9 +58,9 @@ int UmapServInfo::setup_remote_umap_handle(){
   ::write(umap_server_fd, &params, sizeof(params));
   // recieve memfd and region size
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
-  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<loc.size<<std::endl;
+  std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::endl;
 
-  void* base_addr = mmap(0, loc.size, PROT_READ, MAP_SHARED, memfd, 0);
+  void* base_addr = mmap(loc.base_addr, loc.size, PROT_READ, MAP_SHARED|MAP_FIXED, memfd, 0);
   if ((int64_t)base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -188,6 +189,8 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   char status;
   void *base_addr_local;
   void *base_addr_remote;
+  unsigned long aligned_size;
+  unsigned int page_size = 4096;
 
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
@@ -203,13 +206,15 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
 
     fstat(ffd, &st);
     memfd = memfd_create("uffd", 0);
-    ftruncate(memfd, st.st_size);
+    aligned_size = (st.st_size & ~(page_size - 1)) + page_size;
+    ftruncate(memfd, aligned_size);
     mapped_files.push_back(filename);
-    base_addr_local = mmap(0, st.st_size, PROT_READ, MAP_SHARED, memfd, 0);
-    map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, st.st_size);
+    base_addr_local = mmap((void *)next_region_start_addr, aligned_size, PROT_READ, MAP_SHARED|MAP_FIXED,memfd, 0);
+    map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, aligned_size);
     mgr->add_mapped_region(filename, map_reg);
+    UMAP_LOG(Info, "mmap local: 0x"<< std::hex << base_addr_local <<std::endl);
           //Todo: add error handling code
-   // next_region_start_addr += st.st_size;
+    next_region_start_addr += aligned_size;
   }
   //Sending the memfd
   sock_fd_write(csfd, (char*)&(map_reg->reg), sizeof(region_loc), map_reg->memfd);
