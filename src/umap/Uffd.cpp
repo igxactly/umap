@@ -116,8 +116,8 @@ Uffd::uffd_handler( void )
       // TODO: Since the addresses are sorted, we could optimize the
       // search to continue from where it last found something.
       //
-      UMAP_LOG(Info, "Received fault event\n");
-      process_page(iswrite, /*m_server?(char *)get_local_addr(last_addr):*/last_addr);
+      UMAP_LOG(Info, "Received fault event "<<std::hex<<(void *)last_addr<<" local_addr "<<std::hex<<(void *)get_local_addr(last_addr));
+      process_page(iswrite, m_server?(char *)get_local_addr(last_addr):last_addr);
     }
   }
   UMAP_LOG(Debug, "Good bye");
@@ -219,7 +219,7 @@ void
 Uffd::copy_in_page(char* data, void* page_address)
 {
   struct uffdio_copy copy = {
-      .dst = (uint64_t)(/*m_server?get_remote_addr(page_address):*/page_address)
+      .dst = (uint64_t)(m_server?get_remote_addr(page_address):page_address)
     , .src = (uint64_t)data
     , .len = m_page_size
     , .mode = 0
@@ -237,7 +237,7 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 //  }
   UMAP_LOG(Debug, "(page_address = " << page_address << ")");
   struct uffdio_copy copy = {
-      .dst = (uint64_t)page_address
+      .dst = (uint64_t)(m_server?get_remote_addr(page_address):page_address)
     , .src = (uint64_t)data
     , .len = m_page_size
 #ifndef UMAP_RO_MODE
@@ -259,7 +259,7 @@ void
 Uffd::register_region( RegionDescriptor* rd, void* remote_base)
 {
   struct uffdio_register uffdio_register = {
-      .range = {  .start = /*m_server?(__u64)remote_base:*/(__u64)(rd->start()), .len = rd->size() }
+      .range = {  .start = m_server?(__u64)remote_base:(__u64)(rd->start()), .len = rd->size() }
 #ifndef UMAP_RO_MODE
     , .mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP
 #else
@@ -311,6 +311,7 @@ Uffd::get_local_addr(void *remote_addr){
   std::map<void *, RegionDescriptor *>::iterator it;
   for(it=m_rtol_map.begin(); it!=m_rtol_map.end(); it++){
     RegionDescriptor* rd = it->second;
+    UMAP_LOG(Info,"remote_addr: "<<std::hex<<remote_addr<<"registered region addr"<<std::hex<<it->first<<std::endl);
     if((remote_addr >= (char *)it->first) && 
         (remote_addr < ((char *)it->first + rd->size()))){
       return rd->start() + ((char *)remote_addr - (char *)it->first);
@@ -328,7 +329,7 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
   //
   if(!client_term){
     struct uffdio_register uffdio_register = {
-        .range = { .start = /*m_server?(__u64)get_remote_addr(rd->start()):*/(__u64)(rd->start()), .len = rd->size() }
+        .range = { .start = m_server?(__u64)get_remote_addr(rd->start()):(__u64)(rd->start()), .len = rd->size() }
       , .mode = 0
     };
 
@@ -337,12 +338,12 @@ Uffd::unregister_region( RegionDescriptor* rd, bool client_term )
       << " pages from: " << (void*)(uffdio_register.range.start)
       << " - " << (void*)(uffdio_register.range.start +
                                 (uffdio_register.range.len-1)));
+    if(m_server){
+      m_rtol_map.erase((void *)(uffdio_register.range.start));
+    }
 
     if (ioctl(m_uffd_fd, UFFDIO_UNREGISTER, &uffdio_register.range))
       UMAP_ERROR("ioctl(UFFDIO_UNREGISTER) failed: " << strerror(errno));
-    if(m_server){
-      m_rtol_map.erase(rd);
-    }
   }
   rd->rel_ref();
 }
