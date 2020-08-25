@@ -60,7 +60,7 @@ int UmapServInfo::setup_remote_umap_handle(){
   sock_fd_read(umap_server_fd, &(loc), sizeof(region_loc), &(memfd));
   std::cout<<"c: recv memfd ="<<memfd<<" sz ="<<std::hex<<loc.size<<std::endl;
 
-  loc.base_addr = mmap(0, loc.size, PROT_READ, MAP_SHARED, memfd, 0);
+  loc.base_addr = mmap(0, loc.size, PROT_READ|PROT_WRITE, MAP_SHARED, memfd, 0);
   if ((int64_t)loc.base_addr == -1) {
     perror("setup_uffd: map failed");
     exit(1);
@@ -209,7 +209,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
     aligned_size = (st.st_size & ~(page_size - 1)) + page_size;
     ftruncate(memfd, aligned_size);
     mapped_files.push_back(filename);
-    base_addr_local = mmap(0, aligned_size, PROT_READ, MAP_SHARED,memfd, 0);
+    base_addr_local = mmap(0, aligned_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
     map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, aligned_size);
     mgr->add_mapped_region(filename, map_reg);
     UMAP_LOG(Info, "mmap local: 0x"<< std::hex << base_addr_local <<std::endl);
@@ -222,7 +222,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   sock_recv(csfd, (char*)&base_addr_remote, sizeof(base_addr_remote));
   //uffd is already present with the UmapServiceThread
   std::cout<<"s: addr: "<<map_reg->reg.base_addr<<" uffd: "<<uffd<<" map_len="<<map_reg->reg.size<<std::endl;
-  return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, prot, flags, map_reg->filefd, 0, NULL, true, uffd, base_addr_remote); //prot and flags need to be set 
+  return Umap::umap_ex(map_reg->reg.base_addr, map_reg->reg.size, PROT_READ|PROT_WRITE, flags, map_reg->filefd, 0, NULL, true, uffd, base_addr_remote); //prot and flags need to be set 
 }
 
 int UmapServiceThread::submitUnmapRequest(std::string filename, bool client_term){
