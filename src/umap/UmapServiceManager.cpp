@@ -108,12 +108,12 @@ void ClientManager::closeUmapConnection(){
   ::close(umap_server_fd);
 }
 
-void *submit_umap_req(char *filename, int prot, int flags){
+void *submit_umap_req(const char *filename, int prot, int flags){
   ClientManager *cm = ClientManager::getInstance();
   return cm->map_req(std::string(filename), prot, flags);   
 }
 
-int submit_uunmap_req(char *filename){
+int submit_uunmap_req(const char *filename){
   ClientManager *cm = ClientManager::getInstance();
   cm->unmap_req(std::string(filename));
   return 0;
@@ -344,11 +344,11 @@ void init_umap_client(std::string sock_path){
   Umap::connectUmap(sock_path);
 }
 
-void* client_umap(char *filename, int prot, int flags){
+void* client_umap(const char *filename, int prot, int flags){
   return Umap::submit_umap_req(filename, prot, flags);
 }
 
-int client_uunmap(char *filename){
+int client_uunmap(const char *filename){
   return Umap::submit_uunmap_req(filename);
 }
 

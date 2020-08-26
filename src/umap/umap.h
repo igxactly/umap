@@ -82,13 +82,13 @@ void init_umap_client(std::string sock_path);
 void close_umap_client();
 
 void* client_umap(
-    char *filename
+    const char *filename
   , int prot
   , int flags
 );
 
 int client_uunmap(
-    char *filename
+    const char *filename
 );
 
 void umap_server(

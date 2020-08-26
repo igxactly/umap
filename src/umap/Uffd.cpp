@@ -160,7 +160,7 @@ Uffd::Uffd( bool server, int uffd_fd)
   if (pipe2(m_pipe, 0) < 0)
     UMAP_ERROR("userfaultfd pipe failed: " << strerror(errno));
 
-  if(!server){
+  if(!m_server){
     check_uffd_compatibility();
   }
   m_events.resize(m_max_fault_events);

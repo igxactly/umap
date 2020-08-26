@@ -47,7 +47,6 @@ void EvictWorkers::EvictWorker( void )
       continue;
     
     if (w.type != Umap::WorkItem::WorkType::FAST_EVICT) {
-      //m_uffd->disable_write_protect(pd->page);
       if (madvise(pd->page, page_size, MADV_REMOVE) == -1)
         UMAP_ERROR("madvise failed: " << errno << " (" << strerror(errno) << ")");
     }
