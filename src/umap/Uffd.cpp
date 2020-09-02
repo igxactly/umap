@@ -256,6 +256,20 @@ Uffd::copy_in_page_and_write_protect(char* data, void* page_address)
 }
 
 void
+Uffd::wake_up_range(void *page_address)
+{
+  struct uffdio_range wake = {.start = (uint64_t)(m_server?get_remote_addr(page_address):page_address) 
+                             ,.len = m_page_size
+                             };
+  if (ioctl(m_uffd_fd, UFFDIO_WAKE, &wake) == -1){
+    UMAP_ERROR("UFFDIO_WAKE failed @ " 
+      << page_address << " : "
+      << strerror(errno) << std::endl
+    );
+  }
+}
+
+void
 Uffd::register_region( RegionDescriptor* rd, void* remote_base)
 {
   struct uffdio_register uffdio_register = {

@@ -193,10 +193,11 @@ void Buffer::process_page_event(char* paddr, bool iswrite, RegionDescriptor* rd,
         hiwat = pd->spurious_count;
         UMAP_LOG(Debug, "New Spurious cound high water mark: " << hiwat);
       }
-
       UMAP_LOG(Debug, "SPU: " << pd << " From: " << this);
-      unlock();
-      return;
+      work.page_desc = pd;
+      work.c_uffd = c_uffd;
+//      unlock();
+//      return;
     }
   }
   else {                  // This page has not been brought in yet

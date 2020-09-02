@@ -58,6 +58,7 @@ namespace Umap {
       void disable_write_protect( void* );
       void copy_in_page(char* data, void* page_address);
       void copy_in_page_and_write_protect(char* data, void* page_address);
+      void wake_up_range( void* );
 
     private:
       RegionManager&        			m_rm;

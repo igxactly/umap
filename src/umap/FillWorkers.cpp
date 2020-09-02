@@ -46,10 +46,17 @@ namespace Umap {
       if (w.type == Umap::WorkItem::WorkType::EXIT)
         break;    // Time to leave
 
-      if ( w.page_desc->dirty && w.page_desc->data_present ) {
-        c_uffd->disable_write_protect(w.page_desc->page);
+
+      if( w.page_desc->data_present){
+        if ( w.page_desc->dirty ) {
+          c_uffd->disable_write_protect(w.page_desc->page);
+        }
+        else{ 
+          c_uffd->wake_up_range(w.page_desc->page);
+          continue;
+        }
       }
-      else {
+      else{
         uint64_t offset = w.page_desc->region->store_offset(w.page_desc->page);
 
         if (w.page_desc->region->store()->read_from_store(copyin_buf, page_size, offset) == -1)
