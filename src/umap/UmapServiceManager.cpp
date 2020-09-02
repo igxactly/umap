@@ -190,7 +190,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
   void *base_addr_local;
   void *base_addr_remote;
   unsigned long aligned_size;
-  unsigned int page_size = 4096;
+  unsigned long page_size = 4096;
 
   std::lock_guard<std::mutex> task_lock(mgr->sm_mutex);
   mappedRegionInfo *map_reg = mgr->find_mapped_region(filename);
@@ -212,7 +212,7 @@ void *UmapServiceThread::submitUmapRequest(std::string filename, int prot, int f
     base_addr_local = mmap(0, aligned_size, PROT_READ|PROT_WRITE, MAP_SHARED,memfd, 0);
     map_reg = new mappedRegionInfo(ffd, memfd, base_addr_local, aligned_size);
     mgr->add_mapped_region(filename, map_reg);
-    UMAP_LOG(Info, "mmap local: 0x"<< std::hex << base_addr_local <<std::endl);
+    UMAP_LOG(Info,"filename:"<<filename<<" size "<<st.st_size<<" mmap local: 0x"<< std::hex << base_addr_local <<std::endl);
           //Todo: add error handling code
     //next_region_start_addr += aligned_size;
   }

@@ -55,6 +55,7 @@ RegionManager::associateRegion(int fd, void* existing_rd, bool server, int clien
   auto rd = (RegionDescriptor *)existing_rd;
   c_uffd = getActiveUffd(server, client_fd);
   //registering the region has to use remote address
+  UMAP_LOG(Debug, "Associating region "<<remote_base);
   c_uffd->register_region(rd, remote_base);
   return rd->start();
 }
@@ -96,7 +97,7 @@ RegionManager::addRegion(int fd, Store* store, void* region, uint64_t region_siz
   setFDRegionMap(fd, rd);
 
   UMAP_LOG(Info,
-      "region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
+      "Adding region: " << (void*)(rd->start()) << " - " << (void*)(rd->end())
       << ", region_size: " << rd->size()
       << ", number of regions: " << m_active_regions.size() + 1
   );
